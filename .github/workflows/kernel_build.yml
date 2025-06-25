@@ -1,0 +1,57 @@
+name: Build A30s Kernel
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    name: Compile Kernel
+    runs-on: ubuntu-latest
+
+    env:
+      KERNEL_NAME: a30s-kernel
+      KERNEL_DEFCONFIG: a30s-defconfig
+      ARCH: arm64
+      SUBARCH: arm64
+      DEVICE_TREE_PATH: arch/arm64/boot/dts/exynos
+      IMAGE_OUTPUT: arch/arm64/boot/Image.gz
+      DTB_OUTPUT: arch/arm64/boot/dts/exynos/*.dtb
+
+    steps:
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+
+      - name: Set up Toolchain
+        run: |
+          git clone --depth=1 https://github.com/arter97/arm64-gcc.git toolchain
+          echo "TOOLCHAIN_DIR=${GITHUB_WORKSPACE}/toolchain" >> $GITHUB_ENV
+          echo "${GITHUB_WORKSPACE}/toolchain/bin" >> $GITHUB_PATH
+
+      - name: Make Output Directory
+        run: mkdir -p out
+
+      - name: Configure Kernel
+        run: |
+          make O=out ARCH=arm64 ${KERNEL_DEFCONFIG}
+
+      - name: Build Kernel
+        run: |
+          make -j$(nproc) O=out \
+            ARCH=arm64 \
+            CROSS_COMPILE=${GITHUB_WORKSPACE}/toolchain/bin/aarch64-linux-gnu-
+
+      - name: Create zImage-dtb
+        run: |
+          cat out/arch/arm64/boot/Image.gz out/${DEVICE_TREE_PATH}/*.dtb > zImage-dtb
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: A30s-Kernel
+          path: |
+            zImage-dtb
+            out/arch/arm64/boot/Image.gz
+            out/${DEVICE_TREE_PATH}/*.dtb
